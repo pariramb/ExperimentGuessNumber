@@ -101,7 +101,7 @@ async def liders():
     print(f"in round {current_round}")
     global players
     sorted_players = dict(sorted(players.items(), key=lambda item: item[1]))
-    for name, count in sorted_players:
+    for name, count in sorted_players.items():
         print(f"{name}: {count}\n")
 
 async def send_info():
