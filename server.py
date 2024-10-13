@@ -15,31 +15,27 @@ async def send_message_to_client(websocket, message):
 async def async_input(prompt = ''):
     return await asyncio.to_thread(input, prompt)
 
-class Moves:
-    numbers = list()
-    player: str
-
-
 class Server:
-    def __init__(self):
-        self.name_by_websocket = {}
-        self.websoket_by_name = {}
-        self.waiting_for_answer = dict()
-        self.current_player = ""
-        self.correct_number: int = 1
-        # self.move_regex = re.compile(r'^[1-3],[1-3]$')
+    name_by_websocket = dict()
+    websocket_by_name = dict()
+    waiting_for_answer = dict()
+    current_player = str()
+    correct_number: int
 
 server = Server()
+players = dict(list())
+current_round = 1
 
 async def handle_client(websocket):
     async for message in websocket:
         global server
         data = json.loads(message)
 
-        if data['action'] == 'connect' and data['name'] not in server.websoket_by_name.keys():
+        if data['action'] == 'connect' and data['name'] not in server.websocket_by_name.keys():
             print("Новый игрок")
-            server.websoket_by_name[data['name']] = websocket
+            server.websocket_by_name[data['name']] = websocket
             server.name_by_websocket[websocket] = data['name']
+            players[data['name']] = 0
             await websocket.send(json.dumps({"action": "success"}))
         
         elif data['action'] == 'guess':
@@ -53,7 +49,7 @@ async def handle_client(websocket):
 async def main_menu():
     print("Выберите действие:")
     print("1. Загадать число")
-    print("2. Число загадано/загадано новое число")
+    print("2. Уведомить о начале раунда")
     print("3. Ответить участнику")
     print("4. Список участников, ожидающих ответ")
     print("5. Таблица лидеров")
@@ -75,7 +71,7 @@ async def interface():
         elif choice == "4":
             print(f"{server.waiting_for_answer.keys()}")
         elif choice == "5":
-            pass
+            await liders()
         elif choice == "6":
             print("До свидания!")
             break
@@ -84,10 +80,13 @@ async def interface():
 
 
 async def give_answer():
+    global players
     print(f"{server.waiting_for_answer.keys()}")
     name = await async_input("Выберите имя из списка:\n")
     number = int(server.waiting_for_answer[name])
-    websocket = server.websoket_by_name[name]
+    websocket = server.websocket_by_name[name]
+    del server.waiting_for_answer[name]
+    players[name] += 1
     if number == server.correct_number:
         await websocket.send(json.dumps({"action": "result",
                                    "result": "=="}))
@@ -98,12 +97,22 @@ async def give_answer():
         await websocket.send(json.dumps({"action": "result",
                                     "result": "<"}))
 
+async def liders():
+    print(f"in round {current_round}")
+    global players
+    sorted_players = dict(sorted(players.items(), key=lambda item: item[1]))
+    for name, count in sorted_players:
+        print(f"{name}: {count}\n")
 
 async def send_info():
+    global current_round
+    current_round += 1
     for websocket in server.name_by_websocket.keys():
         await send_message_to_client(websocket, json.dumps({"action": "start"}))
 
 async def make_number():
+    global players
+    players = dict()
     server.correct_number = int(await async_input("Введите число\n"))
 
 async def start_server():
